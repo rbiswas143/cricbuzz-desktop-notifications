@@ -55,6 +55,13 @@ class CricStatus:
 		self.comm = ''
 		self.batting = 'N/A'
 
+		self.urgency = None
+		self.urgency_map = {
+			'low': notify.URGENCY_LOW,
+			'normal': notify.URGENCY_NORMAL,
+			'critical': notify.URGENCY_CRITICAL,
+		}
+
 		self.score_available = False
 		self.new_data = False
 
@@ -66,6 +73,8 @@ class CricStatus:
 	def update(self, j):
 		comms = god(j, 'comm_lines', default=[{}])
 		comm = comms[0]
+
+		# Score
 		if 'score' in comm:
 			self.score_available = True
 			self.score = comm['score']
@@ -73,9 +82,19 @@ class CricStatus:
 			self.wkts = comm['wkts']
 		if 'o_no' in comm:
 			self.overs = comm['o_no']
+
+		# Batting team
 		self.batting = self.teamsDict[god(j, 'score', 'batting', 'id', default=1)]
+
+		# Comments
 		comm_all = ['  {}'.format(c['comm']) for c in comms[:2] if 'comm' in c]
 		self.comm = "\n".join(comm_all)
+
+		# Urgency
+		evt_all = [c['evt'] for c in comms[:2] if 'evt' in c]
+		critical_evts = set(['wicket', 'six', 'four'])
+		self.urgency = 'critical' if any([(evt in critical_evts) for evt in evt_all]) else 'normal'
+
 
 	def get_title(self):
 		return '{} : {} vs {}'.format(self.match, self.team1, self.team2)
@@ -84,6 +103,8 @@ class CricStatus:
 		score = '<b>{}: {}-{} in {}</b>'.format(self.batting, self.score, self.wkts, self.overs) if self.score_available else 'Score: Not Available'
 		return '\n{}\n\n{}'.format(score, self.comm)
 
+	def get_urgency(self):
+		return god(self.urgency_map, self.urgency, default=notify.URGENCY_NORMAL)
 
 # Live match IDs
 
@@ -155,6 +176,7 @@ def show_notifcation(m_id, stats):
 	else:
 		notif = all_notifications[m_id]
 		notif.update(stats.get_title(), stats.get_message())
+	notif.set_urgency(stats.get_urgency())
 	notif.show()
 
 def refresh_notifications(app_name=APP_NAME, refresh_interval=REFINT_NOTIF):
