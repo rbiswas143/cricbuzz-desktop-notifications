@@ -24,18 +24,29 @@ live_match_ids = []
 message_queue = []
 all_notifications = {}
 
+# Get or default
+def god(dict_, *keys, default=None):
+	assert len(keys) > 0
+	res = dict_
+	try:
+		for key in keys:
+			res = res[key]
+	except Exception as e:
+		res = default
+		print(e)
+	return res
 
 # Match Status Class and Notification Formatting
 
 class CricStatus:
 
 	def __init__(self, j):
-		self.match = j['match_desc']
-		self.team1 = j['team1']['s_name']
-		self.team2 = j['team2']['s_name']
+		self.match = god(j, 'match_desc', default='Match')
+		self.team1 = god(j, 'team1', 's_name', default='Team1')
+		self.team2 = god(j, 'team2', 's_name', default='Team2')
 		self.teamsDict = {
-			j['team1']['id']: self.team1,
-			j['team2']['id']: self.team2
+			god(j, 'team1', 'id', default=1): self.team1,
+			god(j, 'team2', 'id', default=2): self.team2
 		}
 
 		self.score = '0'
@@ -44,6 +55,7 @@ class CricStatus:
 		self.comm = ''
 		self.batting = 'N/A'
 
+		self.score_available = False
 		self.new_data = False
 
 	def __setattr__(self, key, value):
@@ -52,23 +64,24 @@ class CricStatus:
 		return super(CricStatus, self).__setattr__(key, value)
 
 	def update(self, j):
-		comms = j['comm_lines']
+		comms = god(j, 'comm_lines', default=[{}])
 		comm = comms[0]
 		if 'score' in comm:
+			self.score_available = True
 			self.score = comm['score']
 		if 'wkts' in comm:
 			self.wkts = comm['wkts']
 		if 'o_no' in comm:
 			self.overs = comm['o_no']
-		self.batting = self.teamsDict[j['score']['batting']['id']]
-		comm_all = list(map(lambda c: '  {}'.format(c['comm']), filter(lambda c: 'comm' in c, comms[:2])))
+		self.batting = self.teamsDict[god(j, 'score', 'batting', 'id', default=1)]
+		comm_all = ['  {}'.format(c['comm']) for c in comms[:2] if 'comm' in c]
 		self.comm = "\n".join(comm_all)
 
 	def get_title(self):
 		return '{} : {} vs {}'.format(self.match, self.team1, self.team2)
 
 	def get_message(self):
-		score = '<b>{}: {}-{} in {}</b>'.format(self.batting, self.score, self.wkts, self.overs)
+		score = '<b>{}: {}-{} in {}</b>'.format(self.batting, self.score, self.wkts, self.overs) if self.score_available else 'Score: Not Available'
 		return '\n{}\n\n{}'.format(score, self.comm)
 
 
@@ -86,7 +99,8 @@ def get_live_matches():
 	j =json.loads(json_data)
 	matches = []
 	for m_id, m_data in j['matches'].items():
-		if m_data['state_title'] == 'Live':
+		# print(m_id, god(m_data, 'state_title'), god(m_data, 'series', 'category'))
+		if god(m_data, 'state_title') == 'Live' and god(m_data, 'series', 'category') == 'International':
 			matches.append(m_id)
 	return matches
 
